@@ -119,7 +119,7 @@ body{font-family:var(--f);background:linear-gradient(135deg,#f5f5f0,#e8e8e0);col
 </div>
 <div id="srvOfficialTip" style="font-size:.72rem;color:var(--gy)">将使用 https://web.inksight.site/</div>
 <div id="srvCustomWrap" class="hidden">
-<input type="text" class="inp" id="srvIn" value="http://localhost:8080" placeholder="例如: http://192.168.1.100:8080">
+<input type="text" class="inp" id="srvIn" value="http://本地服务IP:8080" placeholder="例如: http://192.168.1.100:8080">
 <div style="font-size:.68rem;color:var(--gy);margin-top:3px">输入你自己部署的 InkSight 后端地址（含端口）</div>
 </div>
 </div>
@@ -156,7 +156,7 @@ body{font-family:var(--f);background:linear-gradient(135deg,#f5f5f0,#e8e8e0);col
 
 <script>
 var OFFICIAL_SERVER='https://web.inksight.site/';
-var LOCAL_DEFAULT_SERVER='http://localhost:8080';
+var LOCAL_DEFAULT_SERVER='http://本地服务IP:8080';
 var ssid='',ctm=null,devMac='',srvUrl='',srvMode='official';
 var hiddenSsids=[];
 

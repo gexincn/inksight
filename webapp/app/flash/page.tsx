@@ -14,7 +14,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
-import { authHeaders } from "@/lib/auth";
+import { authHeaders, onAuthChanged } from "@/lib/auth";
 
 declare global {
   interface Navigator {
@@ -32,8 +32,8 @@ const steps = [
   },
   {
     icon: MousePointerClick,
-    title: "点击连接",
-    desc: "点击下方的「连接设备」按钮，浏览器将弹出串口选择窗口",
+    title: "点击刷写",
+    desc: "点击下方的「刷写固件」按钮，浏览器将弹出串口选择窗口",
   },
   {
     icon: ListOrdered,
@@ -125,7 +125,7 @@ export default function FlashPage() {
     setSerialSupported(!!navigator.serial);
   }, []);
 
-  useEffect(() => {
+  const refreshAuthState = useCallback(() => {
     fetch("/api/auth/me", { headers: authHeaders() })
       .then((r) => {
         if (r.ok) {
@@ -136,6 +136,20 @@ export default function FlashPage() {
       })
       .catch(() => setAuthState("guest"));
   }, []);
+
+  useEffect(() => {
+    refreshAuthState();
+  }, [refreshAuthState]);
+
+  useEffect(() => {
+    const off = onAuthChanged(refreshAuthState);
+    const onFocus = () => refreshAuthState();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      off();
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refreshAuthState]);
 
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_FIRMWARE_API_BASE?.replace(/\/$/, "");
@@ -657,8 +671,10 @@ export default function FlashPage() {
                 </div>
               ) : (
                 <Button
+                  variant="outline"
                   size="lg"
-                  className="w-full max-w-xs"
+                  className="w-full max-w-xs bg-white text-ink border-ink/20 hover:bg-ink hover:text-white active:bg-ink active:text-white disabled:bg-white disabled:text-ink/50"
+                  type="button"
                   onClick={handleFlash}
                   disabled={!canStartFlash || status === "connecting" || status === "flashing"}
                 >

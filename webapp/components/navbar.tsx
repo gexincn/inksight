@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Menu, X, Github, User, LogOut } from "lucide-react";
-import { authHeaders, clearToken } from "@/lib/auth";
+import { authHeaders, clearToken, onAuthChanged } from "@/lib/auth";
 
 const navLinks = [
   { href: "/", label: "首页" },
@@ -19,12 +19,26 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refreshUser = useCallback(() => {
     fetch("/api/auth/me", { headers: authHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setUsername(d?.username || null))
       .catch(() => setUsername(null));
-  }, [pathname]);
+  }, []);
+
+  useEffect(() => {
+    refreshUser();
+  }, [pathname, refreshUser]);
+
+  useEffect(() => {
+    const off = onAuthChanged(refreshUser);
+    const onFocus = () => refreshUser();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      off();
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refreshUser]);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST", headers: authHeaders() });

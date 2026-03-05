@@ -28,7 +28,7 @@ import {
   ArrowLeft,
   X,
 } from "lucide-react";
-import { authHeaders } from "@/lib/auth";
+import { authHeaders, onAuthChanged } from "@/lib/auth";
 
 interface UserDevice {
   mac: string;
@@ -270,12 +270,26 @@ function ConfigPageInner() {
   const [bindMacInput, setBindMacInput] = useState("");
   const [bindNicknameInput, setBindNicknameInput] = useState("");
 
-  useEffect(() => {
+  const refreshCurrentUser = useCallback(() => {
     fetch("/api/auth/me", { headers: authHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setCurrentUser(d ? { user_id: d.user_id, username: d.username } : null))
       .catch(() => setCurrentUser(null));
   }, []);
+
+  useEffect(() => {
+    refreshCurrentUser();
+  }, [refreshCurrentUser]);
+
+  useEffect(() => {
+    const off = onAuthChanged(refreshCurrentUser);
+    const onFocus = () => refreshCurrentUser();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      off();
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refreshCurrentUser]);
 
   const loadUserDevices = useCallback(async () => {
     setDevicesLoading(true);
@@ -745,6 +759,12 @@ function ConfigPageInner() {
     if (!mac) return;
     loadRuntimeMode();
   }, [mac, loadRuntimeMode]);
+
+  useEffect(() => {
+    if (!mac || !currentUser) {
+      setSettingsMode(null);
+    }
+  }, [mac, currentUser]);
 
   const handleGenerateMode = async () => {
     if (!customDesc.trim()) { showToast("请输入模式描述", "error"); return; }
@@ -1621,7 +1641,7 @@ function ConfigPageInner() {
             )}
           </div>
 
-          {settingsMode && (
+          {mac && currentUser && settingsMode && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/30" onClick={() => setSettingsMode(null)} />
               <Card className="relative z-10 w-full max-w-md">
