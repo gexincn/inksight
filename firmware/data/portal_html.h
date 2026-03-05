@@ -86,17 +86,17 @@ body{font-family:var(--f);background:linear-gradient(135deg,#f5f5f0,#e8e8e0);col
 <!-- Step 1: WiFi + Server -->
 <div id="s1">
 <div class="wtabs">
-<div class="wtab act" id="wtScan" onclick="switchWTab('scan')">选择网络</div>
-<div class="wtab" id="wtMan" onclick="switchWTab('manual')">手动输入</div>
+<div class="wtab" id="wtScan" onclick="switchWTab('scan')">选择网络</div>
+<div class="wtab act" id="wtMan" onclick="switchWTab('manual')">手动输入</div>
 </div>
-<div id="wScan">
+<div id="wScan" class="hidden">
 <ul class="wl" id="wifiList"></ul>
 <div id="wSel" class="hidden" style="display:none;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--bk);border-radius:8px;background:var(--bg);margin-bottom:10px">
 <span id="wSelName" style="font-size:.85rem;font-weight:500"></span>
 <a onclick="reShowList()" style="font-size:.72rem;color:var(--gy);cursor:pointer">重新选择</a>
 </div>
 </div>
-<div id="wMan" class="hidden">
+<div id="wMan">
 <div class="fg">
 <label class="lbl">WiFi 名称 (SSID)</label>
 <input type="text" class="inp" id="ssidIn" placeholder="输入 SSID">
@@ -113,8 +113,15 @@ body{font-family:var(--f);background:linear-gradient(135deg,#f5f5f0,#e8e8e0);col
 </div>
 <div class="fg">
 <label class="lbl">服务器地址</label>
-<input type="text" class="inp" id="srvIn" placeholder="例如: http://192.168.1.100:8080">
-<div style="font-size:.68rem;color:var(--gy);margin-top:3px">InkSight 后端服务的完整地址（含端口）</div>
+<div class="wtabs" style="margin-bottom:8px">
+<div class="wtab act" id="srvOfficial" onclick="switchSrvMode('official')">官方服务</div>
+<div class="wtab" id="srvCustom" onclick="switchSrvMode('custom')">自定义服务</div>
+</div>
+<div id="srvOfficialTip" style="font-size:.72rem;color:var(--gy)">将使用 https://web.inksight.site/</div>
+<div id="srvCustomWrap" class="hidden">
+<input type="text" class="inp" id="srvIn" value="http://localhost:8080" placeholder="例如: http://192.168.1.100:8080">
+<div style="font-size:.68rem;color:var(--gy);margin-top:3px">输入你自己部署的 InkSight 后端地址（含端口）</div>
+</div>
 </div>
 <button class="btn btn-ghost" id="cBtn" onclick="doConnect()"><span class="bt">连接并保存</span><div class="sp"></div></button>
 </div>
@@ -148,7 +155,9 @@ body{font-family:var(--f);background:linear-gradient(135deg,#f5f5f0,#e8e8e0);col
 </div>
 
 <script>
-var ssid='',ctm=null,devMac='',srvUrl='';
+var OFFICIAL_SERVER='https://web.inksight.site/';
+var LOCAL_DEFAULT_SERVER='http://localhost:8080';
+var ssid='',ctm=null,devMac='',srvUrl='',srvMode='official';
 var hiddenSsids=[];
 
 function setStep(n){
@@ -166,15 +175,42 @@ if(mode==='scan'){ts.classList.add('act');tm.classList.remove('act');ps.classLis
 else{tm.classList.add('act');ts.classList.remove('act');pm.classList.remove('hidden');ps.classList.add('hidden');ssid='';document.getElementById('ssidIn').value='';document.getElementById('ssidIn').focus();}
 }
 
+function normalizeServerUrl(url){
+return (url||'').replace(/\/+$/,'');
+}
+
+function switchSrvMode(mode){
+var o=document.getElementById('srvOfficial'),c=document.getElementById('srvCustom');
+var tip=document.getElementById('srvOfficialTip'),wrap=document.getElementById('srvCustomWrap');
+var input=document.getElementById('srvIn');
+srvMode=mode==='custom'?'custom':'official';
+if(srvMode==='official'){
+o.classList.add('act');c.classList.remove('act');
+tip.classList.remove('hidden');wrap.classList.add('hidden');
+srvUrl=normalizeServerUrl(OFFICIAL_SERVER);
+}else{
+c.classList.add('act');o.classList.remove('act');
+wrap.classList.remove('hidden');tip.classList.add('hidden');
+if(!input.value||normalizeServerUrl(input.value)===normalizeServerUrl(OFFICIAL_SERVER))input.value=LOCAL_DEFAULT_SERVER;
+srvUrl=normalizeServerUrl(input.value.trim());
+}
+}
+
 function selW(el){
+var nextSsid=el.dataset.ssid;
 document.querySelectorAll('.wi').forEach(function(i){i.classList.remove('sel')});
-el.classList.add('sel');ssid=el.dataset.ssid;
+el.classList.add('sel');ssid=nextSsid;
+document.getElementById('wtScan').classList.add('act');
+document.getElementById('wtMan').classList.remove('act');
+document.getElementById('pwIn').value='';
 document.getElementById('wifiList').style.display='none';
 var ws=document.getElementById('wSel');ws.style.display='flex';ws.classList.remove('hidden');
 document.getElementById('wSelName').textContent=ssid;
 }
 
 function reShowList(){
+document.getElementById('wtScan').classList.add('act');
+document.getElementById('wtMan').classList.remove('act');
 document.getElementById('wifiList').style.display='';
 var ws=document.getElementById('wSel');ws.style.display='none';ws.classList.add('hidden');
 document.querySelectorAll('.wi').forEach(function(i){i.classList.remove('sel')});
@@ -190,7 +226,7 @@ else{i.type='password';b.innerHTML='<svg width="14" height="14" viewBox="0 0 24 
 function doConnect(){
 var s=ssid||document.getElementById('ssidIn').value.trim();
 var p=document.getElementById('pwIn').value;
-var sv=document.getElementById('srvIn').value.trim();
+var sv=srvMode==='official'?OFFICIAL_SERVER:document.getElementById('srvIn').value.trim();
 var st=document.getElementById('pSt'),btn=document.getElementById('cBtn');
 if(!s){st.className='st e';st.textContent='请选择或输入 WiFi';return;}
 if(!p){st.className='st e';st.textContent='请输入密码';return;}
@@ -198,9 +234,9 @@ if(p.length<8){st.className='st e';st.textContent='密码至少 8 位';return;}
 if(sv&&!sv.match(/^https?:\/\//)){st.className='st e';st.textContent='服务器地址需以 http:// 或 https:// 开头';return;}
 btn.classList.add('ld');btn.disabled=true;
 st.className='st c';st.textContent='正在连接 '+s+' ...';
-srvUrl=sv;
+srvUrl=normalizeServerUrl(sv);
 
-var fd=new FormData();fd.append('ssid',s);fd.append('pass',p);if(sv)fd.append('server',sv);
+var fd=new FormData();fd.append('ssid',s);fd.append('pass',p);if(srvUrl)fd.append('server',srvUrl);
 fetch('/save_wifi',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){
 btn.classList.remove('ld');btn.disabled=false;
 if(d.ok){
@@ -217,7 +253,7 @@ st.className='st e';st.textContent='请求失败，请重试';
 }
 
 function getConfigUrl(){
-if(!srvUrl)return'http://inksight.site/config'+(devMac?'?mac='+encodeURIComponent(devMac):'');
+if(!srvUrl)return'https://www.inksight.site/config'+(devMac?'?mac='+encodeURIComponent(devMac):'');
 try{
 var u=new URL(srvUrl);
 var h=(u.hostname||'').toLowerCase();
@@ -225,7 +261,9 @@ var isPrivate=(h==='localhost'||h==='127.0.0.1'||h==='::1'||/^10\./.test(h)||/^1
 if(isPrivate){
 return u.protocol+'//localhost:3000/config'+(devMac?'?mac='+encodeURIComponent(devMac):'');
 }
-u.port='3000';
+if(h==='web.inksight.site'||h==='inksight.site'||h==='www.inksight.site'){
+return'https://www.inksight.site/config'+(devMac?'?mac='+encodeURIComponent(devMac):'');
+}
 return u.origin+'/config'+(devMac?'?mac='+encodeURIComponent(devMac):'');
 }catch(e){
 return srvUrl.replace(/\/$/,'')+'/config'+(devMac?'?mac='+encodeURIComponent(devMac):'');
@@ -276,6 +314,7 @@ ssid='';
 }
 
 (function(){
+switchWTab('manual');
 fetch('/scan').then(function(r){return r.json()}).then(function(d){
 var ul=document.getElementById('wifiList');ul.innerHTML='';
 (d.networks||[]).forEach(function(n){
@@ -296,7 +335,17 @@ ul.appendChild(li);
 fetch('/info').then(function(r){return r.json()}).then(function(d){
 if(d.mac){devMac=d.mac;document.getElementById('devMAC').textContent=d.mac;}
 if(d.battery)document.getElementById('devBat').textContent=d.battery;
-if(d.server_url){srvUrl=d.server_url;document.getElementById('srvIn').value=d.server_url;}
+if(d.server_url){
+srvUrl=normalizeServerUrl(d.server_url);
+if(/(^|\/\/)(web\.|www\.)?inksight\.site(:|\/|$)/i.test(srvUrl)){
+switchSrvMode('official');
+}else{
+document.getElementById('srvIn').value=srvUrl||LOCAL_DEFAULT_SERVER;
+switchSrvMode('custom');
+}
+}else{
+switchSrvMode('official');
+}
 }).catch(function(){});
 })();
 </script>

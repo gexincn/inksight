@@ -75,7 +75,7 @@ void startCaptivePortal() {
     String apName = "InkSight-" + mac.substring(mac.length() - 5);
     apName.replace(":", "");
 
-    WiFi.mode(WIFI_AP);
+    WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(apName.c_str());
     delay(100);
 
@@ -224,7 +224,7 @@ void startCaptivePortal() {
                 lastWifiError = "TIMEOUT";
             }
             WiFi.disconnect();
-            WiFi.mode(WIFI_AP);
+            WiFi.mode(WIFI_AP_STA);
             String msg;
             if (lastWifiError == "NO_SSID")    msg = "找不到该网络";
             else if (lastWifiError == "AUTH_FAIL") msg = "密码错误";
