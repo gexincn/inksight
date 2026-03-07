@@ -2,172 +2,285 @@
 
 **版本:** v1.0.0
 
-**Base URL:** `https://your-deployment-url.vercel.app`
+**Base URL:** `http://your-server:8080`
 
 ## 1. 概述
 
-本接口服务用于 InkSight 墨水屏设备的云端渲染。API 遵循 **Server-Side Rendering** 原则——服务端负责所有数据聚合、排版布局和图像处理，直接返回设备可读取的图像二进制流。
+InkSight 后端负责设备渲染、预览、配置存储、设备状态、统计、固件信息以及用户与设备绑定。
 
-### 通用请求头
+### 认证方式
 
-| Key | Value | 说明 |
-|-----|-------|------|
-| `User-Agent` | `ESP32-HTTP-Client` | 标识设备类型 (可选) |
+| 方式 | 头 / 凭据 | 说明 |
+|------|-----------|------|
+| 设备鉴权 | `X-Device-Token` | 设备相关接口使用 |
+| 用户鉴权 | Session Cookie | 登录后由后端写入 |
+| 管理鉴权 | Session Cookie | 需要管理员权限的接口使用 |
 
----
+### 常用返回类型
 
-## 2. 核心接口
-
-### 2.1 获取墨水屏渲染图
-
-设备唤醒后调用的核心接口。
-
-- **URL:** `GET /api/render`
-
-#### 请求参数
-
-| 参数名 | 类型 | 必填 | 示例 | 描述 |
-|--------|------|------|------|------|
-| `v` | `float` | 是 | `3.25` | 电池当前电压 |
-| `mac` | `string` | 否 | `A1:B2:C3:D4` | 设备 MAC 地址 |
-| `persona` | `string` | 否 | `鲁迅` | 强制指定角色语气 |
-| `rssi` | `int` | 否 | `-65` | WiFi 信号强度 (dBm) |
-| `w` | `int` | 否 | `400` | 屏幕宽度 (100-1600)，默认 400 |
-| `h` | `int` | 否 | `300` | 屏幕高度 (100-1200)，默认 300 |
-
-#### 响应
-
-- **Status:** `200 OK`
-- **Content-Type:** `image/bmp`
-- **Body:** 1-bit Monochrome BMP 图片数据
-
-#### 错误处理
-
-即使服务端发生错误，也会返回一张错误提示图片（而非 JSON），避免设备解析失败。
-
-#### 示例
-
-```bash
-# 默认分辨率 (400x300)
-curl -X GET "https://your-url.vercel.app/api/render?v=3.20&mac=test_device" --output screen.bmp
-
-# 自定义分辨率 (800x480)
-curl -X GET "https://your-url.vercel.app/api/render?v=3.20&mac=test_device&w=800&h=480" --output screen.bmp
-```
+| 类型 | 说明 |
+|------|------|
+| `image/bmp` | 设备渲染图 |
+| `image/png` | 浏览器预览图 / 分享图 / 小组件图 |
+| `application/json` | 配置、状态、统计、用户、模式等数据 |
 
 ---
 
-### 2.2 浏览器预览
+## 2. API 清单
 
-用于在浏览器中调试查看生成效果。
+### 2.1 渲染与预览
 
-- **URL:** `GET /api/preview`
+#### `GET /api/render`
 
-逻辑与 `/api/render` 一致，但返回 `image/png` 格式，方便在浏览器中查看。
+设备端主渲染接口，返回 `image/bmp`。
 
-请求参数同 `/api/render`。
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `v` | `float` | 否 | 电池电压，默认 `3.3` |
+| `mac` | `string` | 否 | 设备 MAC；提供时需要 `X-Device-Token` |
+| `persona` | `string` | 否 | 强制指定模式 |
+| `rssi` | `int` | 否 | WiFi 信号强度 |
+| `refresh_min` | `int` | 否 | 设备实际刷新间隔（分钟） |
+| `w` | `int` | 否 | 屏幕宽度 |
+| `h` | `int` | 否 | 屏幕高度 |
+| `next` | `int` | 否 | `1` 表示切到下一个模式 |
 
----
+可能返回的响应头：
 
-### 2.3 设备配置
+- `X-Pending-Refresh`
+- `X-Content-Fallback`
+- `X-Preview-Push`
 
-- **URL:** `GET /api/config/{mac}`
+#### `GET /api/widget/{mac}`
 
-#### 路径参数
+只读小组件接口，返回 `image/png`，不会更新设备状态。
 
-| 参数名 | 类型 | 描述 |
-|--------|------|------|
-| `mac` | `string` | 设备 MAC 地址 |
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `mode` | `string` | 否 | 指定模式 |
+| `w` | `int` | 否 | 宽度 |
+| `h` | `int` | 否 | 高度 |
+| `size` | `string` | 否 | `small` / `medium` / `large` |
 
-返回该设备的当前配置。
+#### `GET /api/preview`
 
-- **URL:** `POST /api/config`
+浏览器预览接口，返回 `image/png`。
 
-#### 请求体 (JSON)
-
-```json
-{
-  "mac": "XX:XX:XX:XX:XX:XX",
-  "nickname": "我的桌面",
-  "modes": ["STOIC", "DAILY", "RECIPE"],
-  "strategy": "cycle",
-  "refresh_interval": 60,
-  "language": "zh",
-  "tone": "positive",
-  "lat": 31.23,
-  "lon": 121.47,
-  "llm_provider": "deepseek",
-  "llm_model": "deepseek-chat"
-}
-```
-
----
-
-### 2.4 配置历史
-
-- **URL:** `GET /api/config/{mac}/history`
-
-返回该设备最近 5 次配置记录。
-
----
-
-### 2.5 激活历史配置
-
-- **URL:** `PUT /api/config/{mac}/activate/{config_id}`
-
-将指定的历史配置设为当前活跃配置。
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `v` | `float` | 否 | 预览电压 |
+| `mac` | `string` | 否 | 设备 MAC |
+| `persona` | `string` | 否 | 指定模式 |
+| `city_override` | `string` | 否 | 仅本次预览覆盖城市 |
+| `mode_override` | `string` | 否 | 当前模式的 JSON 覆盖 |
+| `memo_text` | `string` | 否 | MEMO 模式文本覆盖 |
+| `w` | `int` | 否 | 宽度 |
+| `h` | `int` | 否 | 高度 |
+| `no_cache` | `int` | 否 | `1` 表示跳过缓存 |
 
 ---
 
-### 2.6 固件版本列表（Web 在线刷机）
+### 2.2 配置与模式
 
-- **URL:** `GET /api/firmware/releases`
-- **参数:** `refresh`（可选，`true` 时强制刷新缓存）
-- **说明:** 从 GitHub Releases 拉取可用固件版本（仅包含带 `.bin` 产物的 release）
+#### `POST /api/config`
+
+保存设备配置。需要管理员权限。
+
+#### `GET /api/config/{mac}`
+
+获取当前配置。需要 `X-Device-Token`。
+
+#### `GET /api/config/{mac}/history`
+
+获取配置历史。需要 `X-Device-Token`。
+
+#### `PUT /api/config/{mac}/activate/{config_id}`
+
+激活指定历史配置。需要管理员权限。
+
+#### `GET /api/modes`
+
+获取全部内置和自定义模式。
+
+#### `POST /api/modes/custom/preview`
+
+预览自定义模式定义。需要管理员权限。
+
+#### `POST /api/modes/custom`
+
+创建自定义模式。需要管理员权限。
+
+#### `GET /api/modes/custom/{mode_id}`
+
+获取某个自定义模式定义。
+
+#### `DELETE /api/modes/custom/{mode_id}`
+
+删除自定义模式。需要管理员权限。
+
+#### `POST /api/modes/generate`
+
+使用 AI 根据描述生成模式定义。需要管理员权限。
 
 ---
 
-### 2.7 最新固件（Web 在线刷机）
+### 2.3 固件与设备发现
 
-- **URL:** `GET /api/firmware/releases/latest`
-- **参数:** `refresh`（可选，`true` 时强制刷新缓存）
-- **说明:** 返回推荐刷写的最新版本，前端可直接用于默认选择
+#### `GET /api/firmware/releases`
+
+获取 GitHub Releases 中可用的固件列表。
+
+参数：
+
+- `refresh`：可选，`true` 时强制刷新缓存
+
+#### `GET /api/firmware/releases/latest`
+
+获取最新推荐固件。
+
+参数：
+
+- `refresh`：可选，`true` 时强制刷新缓存
+
+#### `GET /api/firmware/validate-url`
+
+校验手动输入的固件下载地址。
+
+参数：
+
+- `url`：必填，必须为可访问的 `.bin` 文件地址
+
+#### `GET /api/devices/recent`
+
+获取最近上线的设备列表，用于刷机后发现设备。
+
+参数：
+
+- `minutes`：可选，默认 `10`
 
 ---
 
-### 2.8 手动固件 URL 校验（Web 在线刷机）
+### 2.4 设备控制与内容
 
-- **URL:** `GET /api/firmware/validate-url`
-- **参数:** `url`（必填，`.bin` 固件下载地址）
-- **说明:** 对手动输入的固件 URL 做格式校验与可达性预检查
+以下接口均面向单设备，通常需要 `X-Device-Token`。
+
+#### `POST /api/device/{mac}/refresh`
+
+标记设备下次唤醒时立即刷新。
+
+#### `GET /api/device/{mac}/state`
+
+获取设备运行状态、在线状态和刷新间隔。
+
+#### `POST /api/device/{mac}/runtime`
+
+设置运行模式，支持：
+
+- `active`
+- `interval`
+
+#### `POST /api/device/{mac}/apply-preview`
+
+推送一次性预览图到设备，下次 `/api/render` 时返回。
+
+#### `POST /api/device/{mac}/switch`
+
+设置设备下次刷新时切换到指定模式。
+
+#### `POST /api/device/{mac}/favorite`
+
+收藏最近一次内容，或收藏指定模式。
+
+#### `GET /api/device/{mac}/favorites`
+
+获取设备收藏列表。
+
+#### `GET /api/device/{mac}/history`
+
+获取设备内容历史。
+
+常用参数：
+
+- `limit`
+- `offset`
+- `mode`
+
+#### `POST /api/device/{mac}/habit/check`
+
+记录习惯打卡。
+
+#### `GET /api/device/{mac}/habit/status`
+
+获取当前周的习惯状态。
+
+#### `DELETE /api/device/{mac}/habit/{habit_name}`
+
+删除习惯及其记录。
+
+#### `POST /api/device/{mac}/token`
+
+生成或返回已有设备令牌。
+
+#### `GET /api/device/{mac}/qr`
+
+生成设备绑定二维码，返回 `image/bmp`。
+
+#### `GET /api/device/{mac}/share`
+
+生成分享图片，返回 `image/png`。
 
 ---
 
-### 2.8.1 Web Flasher 调用链说明
+### 2.5 用户与设备绑定
 
-`webapp` 在线刷机页使用以下调用链：
+#### `POST /api/auth/register`
 
-1. 前端页面请求 `GET /api/firmware/releases` 或 `GET /api/firmware/releases/latest`。
-2. 若设置 `NEXT_PUBLIC_FIRMWARE_API_BASE`，浏览器直接请求后端 API。
-3. 若未设置，前端请求同域 Next.js API Route，由其代理到 `INKSIGHT_BACKEND_API_BASE`。
-4. 用户切换“手动 URL”时，前端调用 `GET /api/firmware/validate-url` 做可达性校验。
+用户注册，并写入登录态。
 
-该设计保证了前后端分离部署与同域部署两种模式都可用。
+#### `POST /api/auth/login`
+
+用户登录，并写入登录态。
+
+#### `GET /api/auth/me`
+
+获取当前登录用户信息。
+
+#### `POST /api/auth/logout`
+
+退出登录。
+
+#### `GET /api/user/devices`
+
+获取当前用户已绑定设备列表。
+
+#### `POST /api/user/devices`
+
+绑定设备到当前用户。
+
+#### `DELETE /api/user/devices/{mac}`
+
+解绑当前用户下的设备。
 
 ---
 
-### 2.9 健康检查
+### 2.6 统计
 
-- **URL:** `GET /api/health`
-- **响应:**
+#### `GET /api/stats/overview`
 
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-02-16T10:00:00Z",
-  "version": "1.0.0"
-}
-```
+获取全局统计概览。需要管理员权限。
+
+#### `GET /api/stats/{mac}`
+
+获取设备统计详情。需要 `X-Device-Token`。
+
+#### `GET /api/stats/{mac}/renders`
+
+获取设备渲染历史。需要 `X-Device-Token`。
+
+参数：
+
+- `limit`
+- `offset`
 
 ---
 

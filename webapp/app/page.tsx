@@ -239,7 +239,7 @@ export default function Home() {
             <div className="flex items-center justify-center animate-fade-in">
               <div className="relative w-full max-w-md aspect-[4/3] rounded-sm border border-ink/10 overflow-hidden">
                 <Image
-                  src="/images/intro.jpg?v=20260304"
+                  src="/images/intro.jpg"
                   alt="InkSight 展示图"
                   fill
                   className="object-cover"

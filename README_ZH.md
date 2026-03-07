@@ -169,16 +169,17 @@ python -m uvicorn api.index:app --host 0.0.0.0 --port 8080
 
 | 入口 | URL | 说明 |
 |------|-----|------|
+| 本地 Web 应用 | `http://localhost:3000` | 前端入口（官网、本地开发、在线刷机、预览、配置） |
 | 在线体验 / 官网 | `https://www.inksight.site` | 公网托管站点（开箱即用） |
 
-| 本地后端页面 | URL | 说明 |
+| 兼容保留页面（后续下线） | URL | 说明 |
 |------|-----|------|
 | 预览控制台 | `http://localhost:8080` | 测试各模式渲染效果 |
 | 配置管理 | `http://localhost:8080/config` | 管理设备配置 |
 | 统计仪表板 | `http://localhost:8080/dashboard` | 设备状态与使用统计 |
 | 模式编辑器 | `http://localhost:8080/editor` | 创建与编辑自定义 JSON 模式 |
 
-### 2.5 Web 应用（官网 + 在线刷机）
+### 2.5 Web 应用（推荐入口）
 
 ```bash
 cd webapp
@@ -190,7 +191,12 @@ npm install
 npm run dev
 ```
 
-默认访问：`http://localhost:3000`
+启动后访问：
+
+| 入口 | URL | 说明 |
+|------|-----|------|
+| 本地 Web 应用 | `http://localhost:3000` | 前端入口（官网、本地开发、在线刷机、预览、配置） |
+| 在线体验 / 官网 | `https://www.inksight.site` | 公网主页（首页、文档、在线刷机） |
 
 环境变量说明（按你选择的方式配置）：
 
@@ -254,7 +260,7 @@ pio device monitor
 
 ![配置管理](images/configuration.png)
 
-访问 `http://your-server:8080/config?mac=XX:XX:XX:XX:XX:XX` 进行在线配置：
+访问 Web 应用 `http://your-server:3000`，登录之后选择设备并进行配置：
 
 | 配置项 | 说明 |
 |--------|------|
@@ -282,6 +288,15 @@ pio device monitor
 - **自定义模式编辑器** — 模板化创建/编辑 JSON 模式
 - **AI 模式生成器** — 通过自然语言生成模式定义
 
+### 统计仪表盘功能
+
+- **设备状态** — 查看最后刷新时间、电池电压、WiFi 信号强度
+- **电压趋势** — 查看电池电压历史曲线（最近 30 条记录）
+- **模式统计** — 查看各模式使用频率分布
+- **每日渲染** — 查看每日渲染次数柱状图
+- **缓存命中率** — 查看缓存使用效率
+- **渲染记录** — 查看最近渲染详情（模式、耗时、状态）
+
 ### 更多能力
 
 - **习惯打卡** — 记录每日习惯完成状态
@@ -296,24 +311,9 @@ API 接口详见 [API 文档](docs/api.md)。
 
 ---
 
-## 统计仪表板
-
-![统计仪表板](images/dashboard.png)
-
-访问 `http://your-server:8080/dashboard?mac=XX:XX:XX:XX:XX:XX` 查看设备统计：
-
-- **设备状态** — 最后刷新时间、电池电压、WiFi 信号强度
-- **电压趋势** — 电池电压历史曲线（最近 30 条记录）
-- **模式统计** — 各模式使用频率分布
-- **每日渲染** — 每日渲染次数柱状图
-- **缓存命中率** — 缓存使用效率
-- **渲染记录** — 最近渲染详情（模式、耗时、状态）
-
----
-
 ## API 端点
 
-### 核心接口
+### 渲染与预览
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -322,7 +322,7 @@ API 接口详见 [API 文档](docs/api.md)。
 | GET | `/api/preview` | 生成 PNG 预览图 |
 | GET | `/api/widget/{mac}` | 只读 Widget 图片接口（可嵌入） |
 
-### 配置接口
+### 配置与模式
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -330,19 +330,23 @@ API 接口详见 [API 文档](docs/api.md)。
 | GET | `/api/config/{mac}` | 获取当前配置 |
 | GET | `/api/config/{mac}/history` | 获取配置历史 |
 | PUT | `/api/config/{mac}/activate/{config_id}` | 激活指定历史配置 |
-
-### 模式管理接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
 | GET | `/api/modes` | 获取模式列表（内置 + 自定义） |
 | POST | `/api/modes/custom/preview` | 预览自定义模式定义 |
-| POST | `/api/modes/custom` | 创建/更新自定义 JSON 模式 |
+| POST | `/api/modes/custom` | 创建自定义 JSON 模式 |
 | GET | `/api/modes/custom/{mode_id}` | 获取自定义模式定义 |
 | DELETE | `/api/modes/custom/{mode_id}` | 删除自定义模式 |
 | POST | `/api/modes/generate` | 通过自然语言生成模式定义（AI） |
 
-### 设备控制接口
+### 固件与设备发现
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/firmware/releases` | 获取固件版本列表 |
+| GET | `/api/firmware/releases/latest` | 获取最新推荐固件 |
+| GET | `/api/firmware/validate-url` | 校验固件下载 URL |
+| GET | `/api/devices/recent` | 获取最近上线设备（用于发现） |
+
+### 设备控制与内容
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -354,55 +358,37 @@ API 接口详见 [API 文档](docs/api.md)。
 | POST | `/api/device/{mac}/favorite` | 收藏当前内容或指定模式 |
 | GET | `/api/device/{mac}/favorites` | 获取收藏列表 |
 | GET | `/api/device/{mac}/history` | 获取内容历史（分页） |
-| POST | `/api/device/{mac}/token` | 生成设备认证 Token |
-| GET | `/api/device/{mac}/qr` | 生成设备二维码 |
-| GET | `/api/device/{mac}/share` | 生成分享图 |
-| GET | `/api/devices/recent` | 获取最近上线设备（用于发现） |
-
-### 习惯打卡接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
 | POST | `/api/device/{mac}/habit/check` | 提交习惯打卡 |
 | GET | `/api/device/{mac}/habit/status` | 获取当周习惯状态 |
 | DELETE | `/api/device/{mac}/habit/{habit_name}` | 删除习惯及其记录 |
+| POST | `/api/device/{mac}/token` | 生成设备认证 Token |
+| GET | `/api/device/{mac}/qr` | 生成设备二维码 |
+| GET | `/api/device/{mac}/share` | 生成分享图 |
 
-### 统计接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/stats/overview` | 全局统计概览（管理端） |
-| GET | `/api/stats/{mac}` | 设备统计详情 |
-| GET | `/api/stats/{mac}/renders` | 渲染历史（分页） |
-
-### 固件接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/firmware/releases` | 获取固件版本列表 |
-| GET | `/api/firmware/releases/latest` | 获取最新固件版本 |
-| GET | `/api/firmware/validate-url` | 校验固件下载 URL |
-
-### 用户认证接口
+### 用户与绑定
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/auth/register` | 注册 |
 | POST | `/api/auth/login` | 登录 |
-| POST | `/api/auth/logout` | 登出 |
 | GET | `/api/auth/me` | 获取当前用户信息 |
-
-### 用户设备管理接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
+| POST | `/api/auth/logout` | 登出 |
 | GET | `/api/user/devices` | 获取当前用户绑定设备 |
 | POST | `/api/user/devices` | 绑定设备 |
 | DELETE | `/api/user/devices/{mac}` | 解绑设备 |
 
+### 统计
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/stats/overview` | 全局统计概览 |
+| GET | `/api/stats/{mac}` | 设备统计详情 |
+| GET | `/api/stats/{mac}/renders` | 渲染历史（分页） |
+
 **说明：**
 - 设备接口在设备已发放 Token 后，需携带 `X-Device-Token`
-- 管理接口在配置 `ADMIN_TOKEN` 后，需携带 `Authorization: Bearer <token>`
+- 用户接口通过登录后的 Session Cookie 鉴权
+- 管理接口使用登录后的管理员会话鉴权
 - `/api/widget/{mac}` 为只读接口，不会更新设备状态或触发刷新
 
 ---

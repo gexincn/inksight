@@ -157,16 +157,17 @@ Entry points:
 
 | Entry | URL | Description |
 |------|-----|-------------|
+| Local Web App | `http://localhost:3000` | Frontend entry for website, local development, web flasher, preview, and configuration |
 | Live Demo / Official Website | `https://www.inksight.site` | Public hosted site (easy start for beginners) |
 
-| Local Backend Page | URL | Description |
+| Compatibility Pages (to be retired later) | URL | Description |
 |------|-----|-------------|
 | Preview Console | `http://localhost:8080` | Test rendering for each mode |
 | Config Manager | `http://localhost:8080/config` | Manage device configuration |
 | Stats Dashboard | `http://localhost:8080/dashboard` | Device status and usage statistics |
 | Mode Editor | `http://localhost:8080/editor` | Create and edit custom JSON modes |
 
-### 2.5 Web App (website + flasher)
+### 2.5 Web App (recommended entry)
 
 ```bash
 cd webapp
@@ -181,7 +182,12 @@ npm run dev
 
 Install Node.js in advance
 
-Default URL: `http://localhost:3000`
+Once running, visit:
+
+| Entry | URL | Description |
+|------|-----|-------------|
+| Local Web App | `http://localhost:3000` | Frontend entry for website, local development, web flasher, preview, and configuration |
+| Live Demo / Official Website | `https://www.inksight.site` | Public website (homepage, docs, online flasher) |
 
 Environment variables (follow the path you choose):
 
@@ -244,7 +250,7 @@ On first successful setup, firmware enters `active` mode by default once.
 
 ![Configuration](images/configuration.png)
 
-Visit `http://your-server:8080/config?mac=XX:XX:XX:XX:XX:XX` to configure your device:
+Visit the Web App at `http://your-server:3000`, log in, select your device, and configure it:
 
 | Setting | Description |
 |---------|-------------|
@@ -272,6 +278,15 @@ Visit `http://your-server:8080/config?mac=XX:XX:XX:XX:XX:XX` to configure your d
 - **Custom Mode Editor** — Create and edit custom JSON modes with visual editor
 - **AI Mode Generator** — Generate mode definitions from natural language descriptions
 
+### Statistics Dashboard Features
+
+- **Device Status** — View last refresh time, battery voltage, and WiFi signal strength
+- **Voltage Trend** — View battery voltage history chart (last 30 records)
+- **Mode Stats** — View usage frequency distribution per mode
+- **Daily Renders** — View daily render count bar chart
+- **Cache Hit Rate** — View cache efficiency
+- **Render Log** — View recent render details (mode, duration, status)
+
 ### Additional Features
 
 - **Habit Tracker** — Track daily habits with check-in functionality (accessible via HABIT mode)
@@ -286,24 +301,9 @@ See the [API Documentation](docs/api.md) (Chinese) for full endpoint details.
 
 ---
 
-## Statistics Dashboard
-
-![Statistics Dashboard](images/dashboard.png)
-
-Visit `http://your-server:8080/dashboard?mac=XX:XX:XX:XX:XX:XX` to view device statistics:
-
-- **Device Status** — Last refresh time, battery voltage, WiFi signal strength (RSSI)
-- **Voltage Trend** — Battery voltage history chart (last 30 records)
-- **Mode Stats** — Usage frequency distribution per mode
-- **Daily Renders** — Daily render count bar chart
-- **Cache Hit Rate** — Cache usage efficiency
-- **Render Log** — Recent render details (mode, duration, status)
-
----
-
 ## API Endpoints
 
-### Core Endpoints
+### Rendering and Preview
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -312,7 +312,7 @@ Visit `http://your-server:8080/dashboard?mac=XX:XX:XX:XX:XX:XX` to view device s
 | GET | `/api/preview` | Generate PNG preview |
 | GET | `/api/widget/{mac}` | Widget endpoint for embedding content (read-only) |
 
-### Configuration Endpoints
+### Configuration and Modes
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -320,19 +320,23 @@ Visit `http://your-server:8080/dashboard?mac=XX:XX:XX:XX:XX:XX` to view device s
 | GET | `/api/config/{mac}` | Get current configuration |
 | GET | `/api/config/{mac}/history` | Get configuration history |
 | PUT | `/api/config/{mac}/activate/{config_id}` | Activate a specific configuration |
-
-### Mode Management Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
 | GET | `/api/modes` | List all available modes (builtin + custom) |
 | POST | `/api/modes/custom/preview` | Preview custom mode definition |
-| POST | `/api/modes/custom` | Create/update custom JSON mode |
+| POST | `/api/modes/custom` | Create custom JSON mode |
 | GET | `/api/modes/custom/{mode_id}` | Get custom mode definition |
 | DELETE | `/api/modes/custom/{mode_id}` | Delete custom mode |
 | POST | `/api/modes/generate` | Generate mode definition from natural language (AI) |
 
-### Device Control Endpoints
+### Firmware and Device Discovery
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/firmware/releases` | Get firmware release list |
+| GET | `/api/firmware/releases/latest` | Get latest recommended firmware |
+| GET | `/api/firmware/validate-url` | Validate firmware download URL |
+| GET | `/api/devices/recent` | Get recently seen devices for discovery |
+
+### Device Control and Content
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -344,55 +348,37 @@ Visit `http://your-server:8080/dashboard?mac=XX:XX:XX:XX:XX:XX` to view device s
 | POST | `/api/device/{mac}/favorite` | Favorite current content or mode |
 | GET | `/api/device/{mac}/favorites` | Get favorites list |
 | GET | `/api/device/{mac}/history` | Get content history (paginated) |
-| POST | `/api/device/{mac}/token` | Generate device authentication token |
-| GET | `/api/device/{mac}/qr` | Generate QR code for device access |
-| GET | `/api/device/{mac}/share` | Get shareable content |
-| GET | `/api/devices/recent` | Get recently used devices |
-
-### Habit Tracker Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
 | POST | `/api/device/{mac}/habit/check` | Record habit check-in |
 | GET | `/api/device/{mac}/habit/status` | Get habit status for current week |
 | DELETE | `/api/device/{mac}/habit/{habit_name}` | Delete habit and all records |
+| POST | `/api/device/{mac}/token` | Generate device authentication token |
+| GET | `/api/device/{mac}/qr` | Generate QR code for device access |
+| GET | `/api/device/{mac}/share` | Get shareable content |
 
-### Statistics Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/stats/overview` | Global statistics overview (admin) |
-| GET | `/api/stats/{mac}` | Device statistics detail |
-| GET | `/api/stats/{mac}/renders` | Render history (paginated) |
-
-### Firmware Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/firmware/releases` | Get firmware release list |
-| GET | `/api/firmware/releases/latest` | Get latest firmware version |
-| GET | `/api/firmware/validate-url` | Validate firmware download URL |
-
-### Authentication Endpoints
+### User and Binding
 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/auth/register` | User registration |
 | POST | `/api/auth/login` | User login |
-| POST | `/api/auth/logout` | User logout |
 | GET | `/api/auth/me` | Get current user info |
-
-### User Device Management
-
-| Method | Path | Description |
-|--------|------|-------------|
+| POST | `/api/auth/logout` | User logout |
 | GET | `/api/user/devices` | List user's bound devices |
 | POST | `/api/user/devices` | Bind device to user |
 | DELETE | `/api/user/devices/{mac}` | Unbind device from user |
 
+### Statistics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/stats/overview` | Global statistics overview |
+| GET | `/api/stats/{mac}` | Device statistics detail |
+| GET | `/api/stats/{mac}/renders` | Render history (paginated) |
+
 **Note:** 
 - Device endpoints require `X-Device-Token` header for authentication
-- Admin endpoints require `Authorization: Bearer <token>` header
+- User endpoints use the session cookie created after login
+- Admin endpoints use an authenticated admin session
 - Widget endpoint (`/api/widget/{mac}`) is read-only and does not update device state or trigger refreshes
 
 ---
