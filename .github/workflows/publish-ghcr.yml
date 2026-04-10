@@ -1,0 +1,42 @@
+name: Build & Push to GHCR
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # 允许推送到 GHCR [7](https://githubdocs.cn/en/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token)[6](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }} # Actions 可用 GITHUB_TOKEN 发布关联包 [6](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)[4](https://githubdocs.cn/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+
+      - name: Build & Push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/backend.Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/inksight-backend:main
+
+      - name: Build & Push webapp
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/webapp.Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/inksight-webapp:main
