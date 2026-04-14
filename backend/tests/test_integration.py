@@ -1012,6 +1012,15 @@ async def test_user_can_preview_and_create_custom_mode(client):
     assert preview["ok"] is True
     assert preview["preview_text"] == "Write with calm intent."
 
+    legacy_preview_resp = await client.post(
+        "/api/modes/preview",
+        json={"mode_def": mode_def, "responseType": "json"},
+    )
+    assert legacy_preview_resp.status_code == 200
+    legacy_preview = legacy_preview_resp.json()
+    assert legacy_preview["ok"] is True
+    assert legacy_preview["preview_text"] == "Write with calm intent."
+
     create_resp = await client.post("/api/modes/custom", json=mode_def)
     assert create_resp.status_code == 200
     assert create_resp.json()["mode_id"] == "MOBILE_NOTE"
@@ -1178,3 +1187,32 @@ async def test_health_endpoint(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_uploads_accept_raw_octet_stream_image(client):
+    payload = png_payload()
+    resp = await client.post(
+        "/api/uploads",
+        content=payload,
+        headers={"x-upload-content-type": "image/png"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["url"].endswith(f"/api/uploads/{body['id']}")
+
+
+@pytest.mark.asyncio
+async def test_uploads_accept_multipart_form_image(client):
+    payload = png_payload()
+    resp = await client.post(
+        "/api/uploads",
+        files={"file": ("frame.png", payload, "image/png")},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["url"].endswith(f"/api/uploads/{body['id']}")

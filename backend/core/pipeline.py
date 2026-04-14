@@ -115,7 +115,7 @@ async def generate_and_render(
     _eff_lang = eff_cfg.get("mode_language", "") or DEFAULT_LANGUAGE
     date_str = _format_date_str(date_ctx, _eff_lang)
 
-    img = _render_for_persona(
+    img = await _render_for_persona(
         persona,
         content,
         date_str=date_str,
@@ -171,6 +171,24 @@ async def _generate_content_for_persona(
 
     effective_language = cfg.get("mode_language", "") or DEFAULT_LANGUAGE
     date_str = _format_date_str(date_ctx, effective_language)
+
+    # ── 静态模式拦截层 ──────────────────────────────────────
+    # 对于 3 个静态模式（POETRY/RIDDLE/THISDAY），
+    # 从本地 SQLite 知识库查询，绕过 LLM 调用，实现零 API 消耗。
+    # 当静态库为空时返回带 _static_fallback 标记的内容，
+    # 此时继续走原有 LLM 路径作为降级策略。
+    if registry.is_json_mode(persona):
+        from .static_content import generate_static_content, should_use_static_fallback
+        static_content = await generate_static_content(
+            persona, mac, date_ctx=date_ctx
+        )
+        if not should_use_static_fallback(static_content):
+            # 静态库命中：直接返回
+            static_content["_from_static_db"] = True
+            static_content["_static_served"] = True
+            logger.info("[Pipeline] Static DB hit for mode=%s mac=%s", persona, mac)
+            return static_content
+        # 静态库未命中，降级走原有 LLM 路径
 
     device_api_key: str | None = None
     device_image_api_key: str | None = None
@@ -269,7 +287,7 @@ async def _generate_content_for_persona(
     raise ValueError(f"Unknown persona: {persona}")
 
 
-def _render_for_persona(
+async def _render_for_persona(
     persona: str,
     content: dict,
     *,
@@ -295,13 +313,13 @@ def _render_for_persona(
     # JSON-defined mode
     if registry.is_json_mode(persona):
         jm = registry.get_json_mode(persona, mac or None, language=language)
-        # Weather 模式下不在状态栏中间重复显示简略天气（只保留日期、电量等）
         if persona.upper() == "WEATHER":
             weather_str_for_bar = ""
             weather_code_for_bar = -1
         else:
             weather_str_for_bar = weather_str
             weather_code_for_bar = weather_code
+
         return render_json_mode(
             jm.definition, content,
             date_str=date_str, weather_str=weather_str_for_bar, battery_pct=battery_pct,
@@ -310,7 +328,6 @@ def _render_for_persona(
             language=language,
         )
 
-    # Builtin Python mode - use original render_mode dispatcher
     return render_mode(
         persona, content,
         date_str=date_str, weather_str=weather_str, battery_pct=battery_pct,

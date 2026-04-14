@@ -368,9 +368,21 @@ export default function ExperiencePage() {
 
       const statusHeader = res.headers.get("x-preview-status");
       const llmRequired = res.headers.get("x-llm-required");
+      const modeName = previewMode || "";
       
       if (statusHeader === "no_llm_required" || llmRequired === "0") {
         setPreviewLlmStatus(null);
+      } else if (statusHeader === "static_served") {
+        // 来自静态数据库，未调用 LLM
+        if (modeName === "POETRY") {
+          setPreviewLlmStatus(locale === "zh" ? "古诗词已加载" : "Served from static poetry");
+        } else if (modeName === "THISDAY") {
+          setPreviewLlmStatus(locale === "zh" ? "历史今日已加载" : "Served from static history");
+        } else if (modeName === "RIDDLE") {
+          setPreviewLlmStatus(locale === "zh" ? "每日一谜已加载" : "Served from static riddles");
+        } else {
+          setPreviewLlmStatus(locale === "zh" ? "静态内容已加载" : "Static content served");
+        }
       } else if (statusHeader === "model_generated") {
         setPreviewLlmStatus(
           locale === "zh" ? "大模型调用成功" : "Model call succeeded",
@@ -494,7 +506,7 @@ export default function ExperiencePage() {
       const displayName = nameFromInput || nameFromDef || (locale === "zh" ? "自定义模式" : "Custom Mode");
       setPreviewModeNameOverride(displayName);
       setPreviewMode(displayName.toUpperCase().replace(/[^A-Z0-9_]/g, "_"));
-      const res = await fetch("/api/modes/preview", {
+      const res = await fetch("/api/modes/custom/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode_def: def, colors: previewColors }),
@@ -505,9 +517,21 @@ export default function ExperiencePage() {
       }
       const statusHeader = res.headers.get("x-preview-status");
       const llmRequired = res.headers.get("x-llm-required");
+      const modeName = previewMode || "";
       
       if (statusHeader === "no_llm_required" || llmRequired === "0") {
         setPreviewLlmStatus(null);
+      } else if (statusHeader === "static_served") {
+        // 来自静态数据库，未调用 LLM
+        if (modeName === "POETRY") {
+          setPreviewLlmStatus(locale === "zh" ? "古诗词已加载" : "Served from static poetry");
+        } else if (modeName === "THISDAY") {
+          setPreviewLlmStatus(locale === "zh" ? "历史今日已加载" : "Served from static history");
+        } else if (modeName === "RIDDLE") {
+          setPreviewLlmStatus(locale === "zh" ? "每日一谜已加载" : "Served from static riddles");
+        } else {
+          setPreviewLlmStatus(locale === "zh" ? "静态内容已加载" : "Static content served");
+        }
       } else if (statusHeader === "model_generated") {
         setPreviewLlmStatus(
           locale === "zh" ? "大模型调用成功" : "Model call succeeded",

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import json
 import logging
+import os
 import secrets
 import hashlib
 import hmac
@@ -14,8 +14,8 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 PAIR_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
+from .db import _MAIN_DB_PATH, get_main_db  # ← 复用 db.py 的路径，与 static_store 保持一致
 from migrations import run_main_db_migrations
-from .db import get_main_db
 from .config import (
     DEFAULT_CITY,
     DEFAULT_LLM_PROVIDER,
@@ -29,7 +29,8 @@ from .config import (
     DEFAULT_REFRESH_INTERVAL,
 )
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "inksight.db")
+# 历史兼容：保留 DB_PATH 别名供外部使用
+DB_PATH = _MAIN_DB_PATH
 
 
 async def init_db():
@@ -1404,14 +1405,14 @@ async def save_config(mac: str, data: dict) -> int:
     await db.execute("UPDATE configs SET is_active = 0 WHERE mac = ?", (mac,))
 
     countdown_events_json = json.dumps(
-        data.get("countdownEvents", []), ensure_ascii=False
+        data.get("countdownEvents", []) or data.get("countdown_events", []), ensure_ascii=False
     )
     time_slot_rules_json = json.dumps(
-        data.get("timeSlotRules", []), ensure_ascii=False
+        data.get("timeSlotRules", []) or data.get("time_slot_rules", []), ensure_ascii=False
     )
     memo_text = data.get("memoText", "")
     mode_overrides_json = json.dumps(
-        data.get("modeOverrides", {}), ensure_ascii=False
+        data.get("modeOverrides", {}) or data.get("mode_overrides", {}), ensure_ascii=False
     )
     # 注意：API key 不再保存到设备配置中，改为使用用户级别的配置（user_llm_config 表）
     # 这里依赖 configs 表的默认值将 is_active 设为 1，因此不再显式写入该列，避免列数不匹配。
