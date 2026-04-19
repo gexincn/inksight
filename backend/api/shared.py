@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import io
 import json
 import logging
@@ -609,9 +610,33 @@ async def build_image(
         "off",
     )
 
+    # ── Preview Cache: Check cache for preview requests (no mac required) ──
+    mode_override_hash = None
+    if preview_mode_override:
+        # Generate a hash of the mode override config for cache key
+        mode_override_hash = hashlib.md5(
+            json.dumps(preview_mode_override, sort_keys=True).encode()
+        ).hexdigest()[:12]
+
+    if not mac and is_mode_cacheable and not skip_cache:
+        # This is a preview request without device mac - use preview cache
+        preview_cache_key = content_cache._get_preview_cache_key(persona, screen_w, screen_h, preview_city_override, mode_override_hash, preview_ui_language)
+        cached_img = await content_cache.get_preview(
+            persona,
+            screen_w,
+            screen_h,
+            city_override=preview_city_override,
+            mode_override_hash=mode_override_hash,
+            ui_language=preview_ui_language,
+        )
+        if cached_img:
+            cache_hit = True
+            img = cached_img
+
     if mac and config and is_mode_cacheable and not skip_cache:
         if not intent_only:
-            await content_cache.check_and_regenerate_all(mac, config, v, screen_w, screen_h, colors=colors)
+            cacheable_modes = get_registry().get_cacheable_ids()
+            await content_cache.check_and_regenerate_all(mac, config, v, screen_w, screen_h, colors=colors, cacheable_modes=cacheable_modes)
         cached_img = await content_cache.get(
             mac,
             persona,
@@ -670,6 +695,16 @@ async def build_image(
                                 mac,
                                 persona,
                             )
+                            if mac:
+                                logger.warning(
+                                    "[QUOTA DEVICE BLOCK] owner_quota_exhausted owner_user_id=%s mac=%s mode=%s cache_hit=%s usage_source=%s user_provided_api_key=%s",
+                                    quota_user_id,
+                                    mac,
+                                    persona,
+                                    cache_hit,
+                                    usage_source,
+                                    user_provided_api_key,
+                                )
                             # 对于设备端，返回兜底图；对于 Web 预览，返回 quota_exhausted 标志让接口处理
                             if mac:
                                 img = _render_quota_exhausted_image(screen_w, screen_h)
@@ -691,6 +726,11 @@ async def build_image(
                     )
         else:
             logger.info("[CACHE MISS] %s:%s - Generating content", mac, persona)
+    elif not mac:
+        # Preview request without device mac
+        if skip_cache:
+            logger.info("[PREVIEW] Skip cache for %s:%s", mac, persona)
+        # img is already set from preview cache above, don't overwrite
     else:
         if skip_cache:
             logger.info("[PREVIEW] Skip cache for %s:%s", mac, persona)
@@ -757,6 +797,16 @@ async def build_image(
                         mac,
                         persona,
                     )
+                    if mac:
+                        logger.warning(
+                            "[QUOTA DEVICE BLOCK] owner_quota_exhausted owner_user_id=%s mac=%s mode=%s cache_hit=%s usage_source=%s user_provided_api_key=%s",
+                            quota_user_id,
+                            mac,
+                            persona,
+                            cache_hit,
+                            usage_source,
+                            user_provided_api_key,
+                        )
                     # 对于设备端，仍然返回1-bit兜底图（设备无法显示弹窗）
                     # 对于Web端，会在 preview 接口中检测并返回 JSON 响应
                     img = _render_quota_exhausted_image(screen_w, screen_h)
@@ -787,6 +837,15 @@ async def build_image(
                         mac,
                         persona,
                     )
+                    if mac:
+                        logger.warning(
+                            "[QUOTA DEVICE BLOCK] quota_query_failed owner_user_id=%s mac=%s mode=%s cache_hit=%s usage_source=%s",
+                            quota_user_id,
+                            mac,
+                            persona,
+                            cache_hit,
+                            usage_source,
+                        )
                     quota_exhausted = True
                     img = _render_quota_exhausted_image(screen_w, screen_h)
                     await update_device_state(
@@ -803,6 +862,15 @@ async def build_image(
                     mac,
                     persona,
                 )
+                if mac:
+                    logger.warning(
+                        "[QUOTA DEVICE BLOCK] owner_role_lookup_failed owner_user_id=%s mac=%s mode=%s cache_hit=%s usage_source=%s",
+                        quota_user_id,
+                        mac,
+                        persona,
+                        cache_hit,
+                        usage_source,
+                    )
                 quota_exhausted = True
                 img = _render_quota_exhausted_image(screen_w, screen_h)
                 await update_device_state(
@@ -859,6 +927,18 @@ async def build_image(
 
         if mac and config and is_mode_cacheable:
             await content_cache.set(mac, persona, img, screen_w, screen_h)
+
+        # ── Preview Cache: Save generated image for preview requests ──
+        if not mac and is_mode_cacheable and not skip_cache and img is not None:
+            await content_cache.set_preview(
+                persona,
+                img,
+                screen_w,
+                screen_h,
+                city_override=preview_city_override,
+                mode_override_hash=mode_override_hash,
+                ui_language=preview_ui_language,
+            )
 
     if mac:
         await update_device_state(
@@ -1171,7 +1251,7 @@ def _render_quota_exhausted_image(screen_w: int, screen_h: int) -> Image.Image:
     """
     img = Image.new("1", (screen_w, screen_h), 1)  # 1 = 白色背景
     draw = ImageDraw.Draw(img)
-    message = "您的免费额度已用完，请联系管理员"
+    message = "当前设备 owner 免费额度已用完，请联系 owner"
     try:
         font = load_font("noto_serif_regular", 12)
     except Exception:  # pragma: no cover - 极端环境下回退

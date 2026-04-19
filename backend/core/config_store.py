@@ -212,6 +212,28 @@ async def init_db():
         except Exception:
             logger.warning("[MIGRATION] Failed to add alert token columns", exc_info=True)
 
+        # chip_family 列迁移（OTA 固件选型用）
+        try:
+            cursor = await db.execute("PRAGMA table_info(device_state)")
+            columns = await cursor.fetchall()
+            names = [c[1] for c in columns]
+            if "chip_family" not in names:
+                await db.execute("ALTER TABLE device_state ADD COLUMN chip_family TEXT DEFAULT ''")
+                await db.commit()
+        except Exception:
+            logger.warning("[MIGRATION] Failed to add chip_family column", exc_info=True)
+
+        # Migration: add photo_frame_index column if missing
+        try:
+            cursor = await db.execute("PRAGMA table_info(device_state)")
+            columns = await cursor.fetchall()
+            names = [c[1] for c in columns]
+            if "photo_frame_index" not in names:
+                await db.execute("ALTER TABLE device_state ADD COLUMN photo_frame_index INTEGER DEFAULT 0")
+            await db.commit()
+        except Exception:
+            logger.warning("[MIGRATION] Failed to add photo_frame_index column", exc_info=True)
+
         # Migration: add OTA columns if missing
         try:
             cursor = await db.execute("PRAGMA table_info(device_state)")
@@ -529,6 +551,7 @@ async def init_db():
             },
         )
         await _migrate_legacy_user_devices(db)
+        await _fix_duplicate_owners(db)
         await db.commit()
 
 
@@ -866,6 +889,36 @@ async def _migrate_legacy_user_devices(db) -> None:
         )
 
 
+async def _fix_duplicate_owners(db) -> None:
+    """Keep only the earliest owner per device; demote others to member."""
+    cursor = await db.execute(
+        """SELECT mac FROM device_memberships
+           WHERE role = 'owner' AND status = 'active'
+           GROUP BY mac HAVING COUNT(*) > 1"""
+    )
+    dups = await cursor.fetchall()
+    if not dups:
+        return
+    now = datetime.now().isoformat()
+    for (mac,) in dups:
+        cursor2 = await db.execute(
+            """SELECT id FROM device_memberships
+               WHERE mac = ? AND role = 'owner' AND status = 'active'
+               ORDER BY created_at ASC LIMIT 1""",
+            (mac,),
+        )
+        keep = await cursor2.fetchone()
+        if keep:
+            await db.execute(
+                """UPDATE device_memberships
+                   SET role = 'member', updated_at = ?
+                   WHERE mac = ? AND role = 'owner' AND id != ?""",
+                (now, mac, keep[0]),
+            )
+    await db.commit()
+    logger.info("Fixed duplicate owners for %d device(s)", len(dups))
+
+
 def _claim_token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
@@ -975,7 +1028,15 @@ async def upsert_device_membership(
     granted_by: Optional[int] = None,
 ) -> dict:
     now = datetime.now().isoformat()
+    upper_mac = mac.upper()
     db = await get_main_db()
+    if role == "owner":
+        await db.execute(
+            """UPDATE device_memberships
+               SET role = 'member', updated_at = ?
+               WHERE mac = ? AND role = 'owner' AND user_id != ?""",
+            (now, upper_mac, user_id),
+        )
     await db.execute(
         """INSERT INTO device_memberships
            (mac, user_id, role, status, nickname, granted_by, created_at, updated_at)
@@ -989,7 +1050,7 @@ async def upsert_device_membership(
                END,
                granted_by = excluded.granted_by,
                updated_at = excluded.updated_at""",
-        (mac.upper(), user_id, role, status, nickname, granted_by, now, now),
+        (upper_mac, user_id, role, status, nickname, granted_by, now, now),
     )
     await db.commit()
     return await get_device_membership(mac, user_id, include_pending=True)
@@ -1200,9 +1261,10 @@ async def bind_device(user_id: int, mac: str, nickname: str = "") -> dict:
     return {"status": "pending_approval"}
 
 
-async def unbind_device(user_id: int, mac: str) -> str:
+async def unbind_device(user_id: int, mac: str, force: bool = False) -> str:
     db = await get_main_db()
-    membership = await get_device_membership(mac, user_id)
+    upper_mac = mac.upper()
+    membership = await get_device_membership(upper_mac, user_id)
     if not membership:
         return "not_found"
     if membership.get("role") == "owner":
@@ -1210,18 +1272,27 @@ async def unbind_device(user_id: int, mac: str) -> str:
             """SELECT COUNT(1)
                FROM device_memberships
                WHERE mac = ? AND status = 'active' AND user_id != ?""",
-            (mac.upper(), user_id),
+            (upper_mac, user_id),
         )
         row = await cursor.fetchone()
         if row and row[0]:
-            return "owner_has_members"
+            if not force:
+                return "owner_has_members"
+            await db.execute(
+                "DELETE FROM device_memberships WHERE mac = ? AND user_id != ?",
+                (upper_mac, user_id),
+            )
+            await db.execute(
+                "DELETE FROM device_access_requests WHERE mac = ?",
+                (upper_mac,),
+            )
     await db.execute(
         "DELETE FROM device_memberships WHERE user_id = ? AND mac = ?",
-        (user_id, mac.upper()),
+        (user_id, upper_mac),
     )
     await db.execute(
         "DELETE FROM device_access_requests WHERE requester_user_id = ? AND mac = ?",
-        (user_id, mac.upper()),
+        (user_id, upper_mac),
     )
     await db.commit()
     return "ok"
@@ -1784,6 +1855,27 @@ async def set_cycle_index(mac: str, idx: int):
     await db.commit()
 
 
+async def get_photo_frame_index(mac: str) -> int:
+    db = await get_main_db()
+    cursor = await db.execute(
+        "SELECT photo_frame_index FROM device_state WHERE mac = ?", (mac,)
+    )
+    row = await cursor.fetchone()
+    return row[0] if row and row[0] else 0
+
+
+async def set_photo_frame_index(mac: str, idx: int):
+    now = datetime.now().isoformat()
+    db = await get_main_db()
+    await db.execute(
+        """INSERT INTO device_state (mac, photo_frame_index, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(mac) DO UPDATE SET photo_frame_index = ?, updated_at = ?""",
+        (mac, idx, now, idx, now),
+    )
+    await db.commit()
+
+
 async def update_device_state(mac: str, **kwargs):
     """Update device state fields (last_persona, last_refresh_at, pending_refresh, etc.)."""
     now = datetime.now().isoformat()
@@ -1801,17 +1893,21 @@ async def update_device_state(mac: str, **kwargs):
             "last_refresh_at",
             "pending_refresh",
             "cycle_index",
+            "photo_frame_index",
             "pending_mode",
             "last_state_poll_at",
             "runtime_mode",
             "expected_refresh_min",
-            "last_reconnect_regen_at",
+            "            last_reconnect_regen_at",
             # OTA fields
             "pending_ota",
             "ota_version",
             "ota_url",
+            "ota_original_url",
             "ota_progress",
             "ota_result",
+            # chip_family
+            "chip_family",
         ):
             await db.execute(
                 f"UPDATE device_state SET {key} = ? WHERE mac = ?",

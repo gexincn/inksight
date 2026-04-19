@@ -19,16 +19,19 @@ from core.config import DEFAULT_LATITUDE, DEFAULT_LONGITUDE
 
 class TestCalcBatteryPct:
     def test_full_charge(self):
-        assert calc_battery_pct(3.3) == 100
+        assert calc_battery_pct(4.20) == 100
 
-    def test_half_charge(self):
-        assert calc_battery_pct(1.65) == 50
+    def test_high_threshold(self):
+        assert calc_battery_pct(3.70) == 50
 
     def test_empty(self):
-        assert calc_battery_pct(0.0) == 0
+        assert calc_battery_pct(3.00) == 0
 
     def test_over_voltage(self):
-        assert calc_battery_pct(4.2) == 100
+        assert calc_battery_pct(4.50) == 100
+
+    def test_under_voltage(self):
+        assert calc_battery_pct(2.50) == 0
 
 
 class TestResolveCity:
@@ -104,7 +107,8 @@ class TestGetWeather:
 
     @pytest.mark.asyncio
     async def test_failure_returns_default(self):
-        with patch("core.context.httpx.AsyncClient") as MockClient:
+        with patch("core.context.httpx.AsyncClient") as MockClient, \
+             patch("core.context._qweather_current", new_callable=AsyncMock, return_value=None):
             instance = AsyncMock()
             instance.get = AsyncMock(side_effect=Exception("timeout"))
             instance.__aenter__ = AsyncMock(return_value=instance)
